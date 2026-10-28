@@ -1,0 +1,510 @@
+#!/bin/zsh
+# avclean 2.1.0 - the av on-demand ClamAV menu for macOS.
+# One private engine per menu session; Python handles safe file accounting.
+
+export LC_CTYPE=en_US.UTF-8
+umask 077
+PREFIX="${HOMEBREW_PREFIX:-/opt/homebrew}"
+AVDIR="${AV_DIR:-$HOME/.av}"
+DBDIR="${AV_DB_DIR:-$AVDIR/database}"
+LOGDIR="$AVDIR/logs"
+QDIR="${AV_QUARANTINE_DIR:-$HOME/quarantine}"
+FRESHCLAM_CONF="${AV_FRESHCLAM_CONF:-$AVDIR/freshclam.conf}"
+SCRIPT_DIR="${${(%):-%x}:A:h}"
+ENGINE="${AV_ENGINE_PATH:-$SCRIPT_DIR/../lib/av_engine.py}"
+[[ -f "$ENGINE" ]] || ENGINE="$SCRIPT_DIR/lib/av_engine.py"
+PYTHON="${AV_PYTHON:-${commands[python3]}}"
+RUNTIME="${AV_RUNTIME_PREFIX:-$SCRIPT_DIR/runtime}"
+CLAMD_BIN="${AV_CLAMD_BIN:-$RUNTIME/sbin/clamd}"
+[[ -x "$CLAMD_BIN" ]] || CLAMD_BIN="${commands[clamd]}"
+FRESHCLAM_BIN="${AV_FRESHCLAM_BIN:-$RUNTIME/bin/freshclam}"
+[[ -x "$FRESHCLAM_BIN" ]] || FRESHCLAM_BIN="${commands[freshclam]}"
+CLAMSCAN_BIN="${AV_CLAMSCAN_BIN:-$RUNTIME/bin/clamscan}"
+[[ -x "$CLAMSCAN_BIN" ]] || CLAMSCAN_BIN="${commands[clamscan]}"
+
+W=52
+SPIN=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+COLS=80
+B=$'\e[1m'; N=$'\e[0m'
+ACC=$'\e[38;5;75m'; OK=$'\e[38;5;78m'; WARN=$'\e[38;5;215m'; ERR=$'\e[38;5;203m'; MUT=$'\e[38;5;245m'
+typeset -g NUM="" DUR="" FIT=""
+typeset -g RUN_SCANPID="" RUN_CAF="" RUN_WORK="" RUN_SOCK="" RUN_UPDATECONF=""
+typeset -g DAEMON_PID="" DAEMON_DIR="" DAEMON_STAMP="" DAEMON_JOBS="" DAEMON_FRESH=0 DAEMON_LOG=""
+typeset -g ABORT=0 JOBS=4
+
+rule() { printf '  %s' "$MUT"; printf '─%.0s' {1..$W}; printf '%s\n' "$N"; }
+header() { [[ -t 1 ]] && clear; echo; echo "  ${B}${ACC}◆ ClamAV${N}  ${MUT}/${N}  ${B}$1${N}"; rule; }
+pause() { [[ -t 0 ]] || return; echo; read -rsk 1 "?  ${MUT}Press any key to go back...${N}"; }
+item() { printf "   ${B}${ACC}%s${N}  %-20s ${MUT}%s${N}\n" "$1" "$2" "$3"; }
+row() { printf "  ${MUT}%-16s${N}%s\n" "$1" "$2"; }
+ago() {
+  local s=$(( $(date +%s) - $1 )); (( s < 0 )) && s=0
+  if (( s < 90 )); then echo 'just now'
+  elif (( s < 5400 )); then echo "$(( (s+30)/60 ))m ago"
+  elif (( s < 129600 )); then echo "$(( (s+1800)/3600 ))h ago"
+  else echo "$(( s/86400 ))d ago"; fi
+}
+dur() {
+  local s=$1
+  if (( s >= 3600 )); then echo "$((s/3600))h $((s%3600/60))m"
+  elif (( s >= 60 )); then echo "$((s/60))m $((s%60))s"
+  else echo "${s}s"; fi
+}
+fnum() { local s=$1 r=""; while (( ${#s} > 3 )); do r=",${s[-3,-1]}$r"; s=${s[1,-4]}; done; NUM="$s$r"; }
+num() { fnum "$1"; echo "$NUM"; }
+fdur() {
+  local s=$1 h m; (( s < 0 )) && s=0
+  h=$((s/3600)); m=$((s%3600/60)); s=$((s%60))
+  if ((h)); then printf -v DUR '%d:%02d:%02d' $h $m $s; else printf -v DUR '%02d:%02d' $m $s; fi
+}
+fit() { local s=$1 m=$2; ((m<10)) && m=10; if ((${#s}>m)); then FIT="…${s[-$((m-1)),-1]}"; else FIT=$s; fi; }
+spin_line() { fdur $3; printf '\r  %s%s%s %s  %s%s%s\033[K' "$ACC" "${SPIN[$1%10+1]}" "$N" "$2" "$MUT" "$DUR" "$N"; }
+
+# Only tracked children of this av session are stopped.
+owned_alive() {
+  local parent
+  [[ "$1" == <-> ]] || return 1
+  parent=$(ps -o ppid= -p "$1" 2>/dev/null)
+  parent="${parent//[[:space:]]/}"
+  [[ "$parent" == "$$" ]] && kill -0 "$1" 2>/dev/null
+}
+stop_child() {
+  local child="$1" i
+  owned_alive "$child" || return 0
+  kill -TERM "$child" 2>/dev/null
+  for i in {1..50}; do
+    kill -0 "$child" 2>/dev/null || break
+    sleep 0.1
+  done
+  owned_alive "$child" && kill -KILL "$child" 2>/dev/null
+  wait "$child" 2>/dev/null
+  return 0
+}
+cleanup_run() {
+  [[ -n "$RUN_SCANPID" ]] && stop_child "$RUN_SCANPID"
+  [[ -n "$RUN_CAF" ]] && stop_child "$RUN_CAF"
+  RUN_SCANPID=""; RUN_CAF=""
+  [[ -n "$RUN_WORK" ]] && rm -rf -- "$RUN_WORK"
+  RUN_WORK=""
+  [[ -n "$RUN_UPDATECONF" ]] && rm -f -- "$RUN_UPDATECONF"
+  RUN_UPDATECONF=""
+  [[ -t 1 ]] && printf '\e[?25h'
+  return 0
+}
+stop_clamd() {
+  [[ -n "$DAEMON_PID" ]] && stop_child "$DAEMON_PID"
+  DAEMON_PID=""; DAEMON_STAMP=""; DAEMON_JOBS=""; RUN_SOCK=""; DAEMON_LOG=""
+  [[ -n "$DAEMON_DIR" ]] && rm -rf -- "$DAEMON_DIR"
+  DAEMON_DIR=""
+  return 0
+}
+cleanup_all() { cleanup_run; stop_clamd; }
+
+start_clamd() {
+  local stamp
+  DAEMON_FRESH=0
+  stamp=$("$PYTHON" "$ENGINE" db-stamp --database "$DBDIR") || return 1
+  if [[ -n "$DAEMON_PID" && "$DAEMON_STAMP" == "$stamp" && "$DAEMON_JOBS" == "$JOBS" ]] && owned_alive "$DAEMON_PID"; then return 0; fi
+  stop_clamd
+  # A short private socket pathname also works when HOME contains long names.
+  DAEMON_DIR=$(mktemp -d /tmp/av-clamd.XXXXXXXX) || return 1
+  chmod 700 "$DAEMON_DIR"
+  RUN_SOCK="$DAEMON_DIR/clamd.sock"
+  mkdir -p "$AVDIR/engine-logs" || { stop_clamd; return 1; }
+  DAEMON_LOG=$(mktemp "$AVDIR/engine-logs/session-$$.XXXXXXXX") || { stop_clamd; return 1; }
+  cat > "$DAEMON_DIR/clamd.conf" <<EOF
+Foreground yes
+LocalSocket $RUN_SOCK
+LocalSocketMode 600
+DatabaseDirectory $DBDIR
+TemporaryDirectory $DAEMON_DIR
+MaxThreads $((JOBS+2))
+MaxQueue $((JOBS*4+8))
+MaxFileSize 2047M
+MaxScanSize 2047M
+MaxScanTime 120000
+AlertExceedsMax yes
+ConcurrentDatabaseReload no
+SelfCheck 0
+ExitOnOOM yes
+EOF
+  "$CLAMD_BIN" --config-file="$DAEMON_DIR/clamd.conf" > "$DAEMON_LOG" 2>&1 &
+  DAEMON_PID=$!; DAEMON_STAMP="$stamp"; DAEMON_JOBS="$JOBS"; DAEMON_FRESH=1
+}
+
+sig_epoch() {
+  local -a f
+  if [[ -f "$AVDIR/db-checked" ]]; then stat -f %m "$AVDIR/db-checked"; return; fi
+  f=($DBDIR/daily.c?d(N)); ((${#f})) && stat -f %m "$f[1]"
+}
+last_scan() {
+  local -a logs
+  logs=("$LOGDIR"/*.log(Nom)); ((${#logs})) || { echo never; return; }
+  local name="${${logs[1]:t}%.log}"
+  local label="${${name[17,-1]}%%-*}"
+  echo "${name[1,4]}-${name[5,6]}-${name[7,8]} ${name[10,11]}:${name[12,13]} · $label"
+}
+quarantine_count() { "$PYTHON" "$ENGINE" count-quarantine --dest "$QDIR" 2>/dev/null; }
+dashboard() {
+  local v ep age c
+  v=$("$CLAMSCAN_BIN" --version 2>/dev/null)
+  row Engine "${${(s:/:)v}[1]:-not found}"
+  ep=$(sig_epoch)
+  if [[ -n "$ep" ]]; then
+    age=$(( $(date +%s) - ep )); c=$OK
+    ((age>=172800)) && c=$WARN; ((age>=604800)) && c=$ERR
+    row Signatures "${c}●${N} checked $(ago $ep)"
+  else row Signatures "${ERR}● missing${N} · run Update"; fi
+  row 'Last scan' "$(last_scan)"
+  row Quarantine "$(quarantine_count) file(s)"
+  row Workers "$JOBS · private engine reused until Quit"
+}
+
+update_signatures() {
+  local frame=0 t0=$SECONDS rc=1 update_log
+  [[ -x "$FRESHCLAM_BIN" ]] || { echo "  ${ERR}freshclam is not installed.${N}"; return 1; }
+  mkdir -p "$AVDIR/update-logs" || return 2
+  RUN_UPDATECONF=$(mktemp "$AVDIR/update-config.XXXXXXXX") || return 2
+  update_log=$(mktemp "$AVDIR/update-logs/update-$$.XXXXXXXX") || { rm -f -- "$RUN_UPDATECONF"; RUN_UPDATECONF=""; return 2; }
+  # The private engine reloads by DB fingerprint at the next scan.
+  if ! awk '$1 != "NotifyClamd"' "$FRESHCLAM_CONF" > "$RUN_UPDATECONF"; then
+    rm -f -- "$RUN_UPDATECONF"; RUN_UPDATECONF=""; return 2
+  fi
+  "$FRESHCLAM_BIN" --config-file="$RUN_UPDATECONF" --datadir="$DBDIR" > "$update_log" 2>&1 &
+  RUN_SCANPID=$!
+  while kill -0 "$RUN_SCANPID" 2>/dev/null; do
+    if ((ABORT)); then stop_child "$RUN_SCANPID"; RUN_SCANPID=""; rm -f -- "$RUN_UPDATECONF"; RUN_UPDATECONF=""; printf '\r\033[K'; return 130; fi
+    spin_line $frame 'Checking for signature updates' $((SECONDS-t0))
+    ((frame++)); sleep 0.1
+  done
+  wait "$RUN_SCANPID"; rc=$?; RUN_SCANPID=""
+  rm -f -- "$RUN_UPDATECONF"; RUN_UPDATECONF=""
+  printf '\r\033[K'
+  if ((rc==0)); then
+    touch "$AVDIR/db-checked"
+    echo "  ${OK}✔ Signatures are up to date${N}"
+  else
+    echo "  ${WARN}! Update failed; see $update_log${N}"
+    tail -n 3 "$update_log"
+  fi
+  return $rc
+}
+has_signatures() {
+  "$PYTHON" "$ENGINE" database-ready --database "$DBDIR"
+}
+
+ensure_fresh() {
+  if has_signatures && [[ -f "$AVDIR/db-checked" ]] && (( $(date +%s) - $(stat -f %m "$AVDIR/db-checked") < 86400 )); then return 0; fi
+  update_signatures
+  local rc=$?
+  ((rc==130)) && return 130
+  if ! has_signatures; then
+    echo "  ${ERR}No signature database is available. Run: av update${N}"
+    return 2
+  fi
+  if ((rc)); then echo "  ${WARN}Existing signatures will be used; their freshness is unverified.${N}"; fi
+  return 0
+}
+do_update() {
+  header 'Update signatures'; echo
+  ABORT=0; trap 'ABORT=1' INT
+  update_signatures
+  local rc=$?
+  trap - INT
+  return $rc
+}
+
+offer_quarantine() {
+  local report="$1" ans=""
+  echo; echo "  ${B}${WARN}Detected files${N}"
+  "$PYTHON" "$ENGINE" detections "$report"
+  echo
+  echo "  ${MUT}Detection can be a false positive. Review before moving files.${N}"
+  [[ -t 0 ]] || return
+  read -rk 1 "ans?  Move detected files to ~/quarantine? [y/N] "; echo
+  [[ "$ans" == [yY] ]] && "$PYTHON" "$ENGINE" quarantine --report "$report" --dest "$QDIR"
+}
+
+run_scan() {
+  local label="$1" title="$2"; shift 2
+  (($#)) || { echo "  ${ERR}Nothing to scan.${N}"; return 2; }
+  header "$title"; echo
+  ABORT=0; trap 'ABORT=1' INT
+  ensure_fresh
+  local freshness_rc=$?
+  if ((freshness_rc)); then
+    trap - INT
+    ((freshness_rc==130)) && echo "  ${WARN}■ Cancelled${N}"
+    return $freshness_rc
+  fi
+  if ! start_clamd; then trap - INT; echo "  ${ERR}Cannot start the private engine.${N}"; return 2; fi
+  RUN_WORK=$(mktemp -d "$AVDIR/run.XXXXXXXX") || { trap - INT; return 2; }
+  local logf="$LOGDIR/$(date +%Y%m%d-%H%M%S)-$label-$$-$RANDOM.log"
+  local phase=indexing total=0 completed=0 scanned=0 found=0 limits=0 errors=0 skipped=0 last=""
+  local frame=0 t0=$SECONDS rc=0 rows=0 el=0 p=0 eta="" old_completed=0 old_t=$SECONDS
+  local text_phase line1 line2 line3 line4 summary outcome="failed" duration=0 log_offset=0 engine_healthy=0
+  ((DAEMON_FRESH)) || log_offset=$(stat -f %z "$DAEMON_LOG" 2>/dev/null)
+  log_offset=${log_offset:-0}
+  typeset -F rate=0 inst=0
+  [[ -t 1 ]] && printf '\e[?25l'
+  echo "  ${MUT}$JOBS workers · symlinks are not followed · Ctrl+C to stop${N}"
+  echo "  ${MUT}Files over 2047 MiB and engine limits are reported as incomplete.${N}"
+  caffeinate -i -t 43200 > /dev/null 2>&1 &
+  RUN_CAF=$!
+  "$PYTHON" "$ENGINE" scan --socket "$RUN_SOCK" --work "$RUN_WORK" --log "$logf" --jobs "$JOBS" --ready-timeout 240 --engine-log "$DAEMON_LOG" --engine-log-offset "$log_offset" --daemon-pid "$DAEMON_PID" --exclude-path "$RUN_WORK" --exclude-path "$DAEMON_DIR" --exclude-path "$DAEMON_LOG" --exclude-path "$logf" --exclude-path "$logf.json" --max-file-size 2146435072 -- "$@" > "$RUN_WORK/worker.log" 2>&1 &
+  RUN_SCANPID=$!
+  while kill -0 "$RUN_SCANPID" 2>/dev/null; do
+    if ((ABORT)); then stop_child "$RUN_SCANPID"; break; fi
+    if [[ -r "$RUN_WORK/progress" ]]; then
+      IFS=$'\t' read -r phase total completed scanned found limits errors skipped last < "$RUN_WORK/progress"
+    fi
+    el=$((SECONDS-t0)); fdur $el
+    case "$phase" in
+      indexing) text_phase='Indexing files' ;;
+      waiting) text_phase='Loading virus signatures' ;;
+      scanning) text_phase='Scanning' ;;
+      *) text_phase='Finishing' ;;
+    esac
+    if ((SECONDS-old_t>=2)); then
+      inst=$(( (completed-old_completed)*1.0/(SECONDS-old_t) ))
+      if ((rate==0)); then rate=$inst; else rate=$((rate*0.6+inst*0.4)); fi
+      old_completed=$completed; old_t=$SECONDS
+    fi
+    eta=""; ((rate>0 && total>completed)) && { fdur $(( (total-completed)/rate )); eta=" · ETA $DUR"; }
+    fdur $el
+    p=0; ((total>0)) && p=$((completed*100/total))
+    line1="  ${ACC}${SPIN[frame%10+1]}${N} ${B}${text_phase}${N} · $DUR elapsed"
+    fnum "$scanned"
+    line2="  $completed / $total files · ${p}% · $NUM scanned${eta}"
+    line3="  ${MUT}threats $found · limits $limits · errors $errors · skipped $skipped${N}"
+    fit "$last" $((COLS-8)); line4="  ${MUT}▸ ${FIT}${N}"
+    if [[ -t 1 ]]; then
+      printf '\r%s\033[K\n%s\033[K\n%s\033[K\n%s\033[K\n\033[4A' "$line1" "$line2" "$line3" "$line4"
+      rows=4
+    fi
+    ((frame++)); sleep 0.1
+  done
+  wait "$RUN_SCANPID" 2>/dev/null; rc=$?; RUN_SCANPID=""
+  ((rows)) && printf '\r\033[J'
+  if [[ -r "$logf.json" ]]; then
+    "$PYTHON" "$ENGINE" engine-health "$logf.json" && engine_healthy=1
+    summary=$("$PYTHON" "$ENGINE" summary "$logf.json")
+    IFS=$'\t' read -r total completed scanned found limits errors skipped outcome duration <<< "$summary"
+  else
+    echo "  ${ERR}The scan worker failed; see $AVDIR/last-worker.log${N}"
+    cp "$RUN_WORK/worker.log" "$AVDIR/last-worker.log"
+    tail -n 5 "$AVDIR/last-worker.log"
+    outcome=failed
+  fi
+  el=$((SECONDS-t0)); cleanup_run; trap - INT
+  if ((ABORT)) || [[ "$outcome" == cancelled ]]; then outcome=cancelled; stop_clamd
+  elif ((!engine_healthy)); then stop_clamd; fi
+  rule
+  case "$outcome" in
+    clean) echo "  ${OK}${B}✔ Scan complete · no threats found${N}" ;;
+    threats) echo "  ${ERR}${B}✖ $found threat(s) detected${N}"
+      ((errors>0 || skipped>0 || limits>0 || scanned<total)) && echo "  ${WARN}Coverage incomplete · review errors, skips and limits${N}" ;;
+    cancelled) echo "  ${WARN}${B}■ Scan cancelled · partial results${N}" ;;
+    *) echo "  ${WARN}${B}! Scan incomplete · review errors, skips and limits${N}" ;;
+  esac
+  rule
+  row 'Files scanned' "$(num $scanned) of $(num $total) indexed"
+  row Threats "$found"; row 'Engine limits' "$limits"; row Errors "$errors"; row Skipped "$skipped"
+  row Duration "$(dur $el)"; row Engine "private clamd · $JOBS workers"
+  row Log "${logf/#$HOME/~}"
+  ((errors>0)) && echo "  ${MUT}Errors may involve permissions or engine failures; inspect the log.${N}"
+  ((found>0)) && offer_quarantine "$logf.json"
+  case "$outcome" in
+    clean) return 0 ;;
+    threats) ((errors>0 || skipped>0 || limits>0 || scanned<total)) && return 2; return 1 ;;
+    cancelled) return 130 ;;
+    *) return 2 ;;
+  esac
+}
+
+quick_scan() {
+  local -a dirs=(); local d
+  for d in "$HOME/Downloads" "$HOME/Desktop" "$HOME/Documents"; do [[ -d "$d" ]] && dirs+=("$d"); done
+  run_scan quick 'Quick scan' "${dirs[@]}"
+}
+full_scan() {
+  local yn=""
+  header 'Full scan'; echo
+  echo '  Scans /Users, /Applications, /Library, /opt and /usr/local.'
+  echo "  ${MUT}Only accessible regular files are scanned; errors are reported.${N}"
+  echo "  ${MUT}$JOBS workers. Use AV_JOBS to choose another limit.${N}"
+  read -rk 1 "yn?  Continue? [y/N] "; echo
+  [[ "$yn" == [yY] ]] && run_scan full 'Full scan' /Users /Applications /Library /opt /usr/local
+}
+custom_scan() {
+  local raw="" t; local -a items=() targets=()
+  header 'Drag & drop'; echo
+  echo '  Drag files or folders from Finder here, then press Enter.'; echo
+  read -r "raw?  ${ACC}❯${N} " || return
+  items=(${(Q)${(z)raw}})
+  for t in "${items[@]}"; do t="${t/#\~/$HOME}"; targets+=("$t"); done
+  if ((${#targets})); then run_scan custom 'Custom scan' "${targets[@]}"; else echo '  Nothing selected.'; fi
+}
+browse() {
+  local dir="$HOME" page=0 per=15 ans="" i start count pages newp=""
+  local -a subs
+  while true; do
+    header 'Choose folder'
+    subs=("$dir"/*(/N)); count=${#subs}; pages=$(((count+per-1)/per)); ((pages<1)) && pages=1
+    ((page>=pages)) && page=$((pages-1)); start=$((page*per))
+    echo; echo "  ${B}${ACC}▸ ${dir/#$HOME/~}${N}"; echo "  $count folder(s) · page $((page+1))/$pages"; echo
+    for ((i=1; i<=per && start+i<=count; i++)); do printf '   %s%2d%s  %s/\n' "$ACC" $i "$N" "${subs[start+i]:t}"; done
+    echo; rule
+    echo '   s scan   u up   h home   / path   n next   p previous   q back'; echo
+    read -r "ans?  ${ACC}❯${N} " || return
+    case "$ans" in
+      s) run_scan folder "Scan ${dir:t}" "$dir"; pause ;;
+      u) dir="${dir:h}"; page=0 ;;
+      h) dir="$HOME"; page=0 ;;
+      n) ((page<pages-1)) && ((page++)) ;;
+      p) ((page>0)) && ((page--)) ;;
+      /) read -r "newp?  path ❯ " || return
+         newp="${(Q)newp}"; newp="${newp/#\~/$HOME}"
+         if [[ -d "$newp" ]]; then dir="${newp:a}"; page=0; else echo '  Folder not found.'; sleep 1; fi ;;
+      q|Q) return ;;
+      <->) if ((ans>=1 && ans<=per && start+ans<=count)); then dir="${subs[start+ans]}"; page=0; fi ;;
+    esac
+  done
+}
+history_view() {
+  local -a logs; local i pick="" f name scanned infected errors outcome line summary
+  header 'Scan history'; echo
+  logs=("$LOGDIR"/*.log(Nom[1,10]))
+  ((${#logs})) || { echo '  No scans yet.'; pause; return; }
+  for ((i=1;i<=${#logs};i++)); do
+    f=${logs[i]}; name="${${f:t}%.log}"; outcome=unknown; scanned='?'; infected='?'; errors=0
+    if [[ -f "$f.json" ]]; then
+      summary=$("$PYTHON" "$ENGINE" summary "$f.json")
+      local indexed completed limits skipped duration
+      IFS=$'\t' read -r indexed completed scanned infected limits errors skipped outcome duration <<< "$summary"
+    else
+      line=$(awk '/^SUMMARY/{s=$0} END{print s}' "$f")
+      if [[ -n "$line" ]]; then
+        scanned=${${line#*scanned=}%% *}; infected=${${line#*infected=}%% *}
+        [[ "$line" == *'errors='* ]] && errors=${${line#*errors=}%% *}
+      else
+        scanned=$(awk '/^Scanned files:/{print $NF}' "$f"); infected=$(awk '/^Infected files:/{print $NF}' "$f")
+        errors=$(awk '/^Total errors:/{print $NF}' "$f"); errors=${errors:-0}
+      fi
+      if [[ "$infected" == <-> && "$errors" == <-> ]]; then
+        if ((infected>0)); then outcome=threats; elif ((errors>0)); then outcome=incomplete; else outcome='legacy: unverified'; fi
+      fi
+    fi
+    printf '   %s%2d%s  %s-%s-%s %s:%s  %s files · %s\n' "$ACC" $i "$N" "${name[1,4]}" "${name[5,6]}" "${name[7,8]}" "${name[10,11]}" "${name[12,13]}" "$scanned" "$outcome"
+  done
+  echo; read -r "pick?  Number to open a log, or Enter to go back ❯ " || return
+  if [[ "$pick" == <-> ]] && ((pick>=1 && pick<=${#logs})); then less -R -- "${logs[pick]}"; fi
+}
+show_status() {
+  header 'System status'; echo; dashboard; echo
+  row 'CPU cores' "$(sysctl -n hw.ncpu) total · $(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null) performance"
+  row 'Private engine' "${DAEMON_PID:-not started}"
+  row 'File size limit' '2047 MiB · larger files explicitly skipped'
+  row 'Symbolic links' 'not followed'
+  row Logs "${LOGDIR/#$HOME/~}"; row Quarantine "${QDIR/#$HOME/~}"
+}
+av_init() {
+  [[ "$(uname -s)" == Darwin ]] || { echo 'av: avclean currently supports macOS only.' >&2; return 2; }
+  if [[ -z "$AV_PYTHON" ]]; then
+    local candidate
+    for candidate in "$PREFIX/opt/python@3.14/libexec/bin/python3" "$PREFIX/bin/python3" "${commands[python3]}"; do
+      if [[ -x "$candidate" ]] && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3,10))' 2>/dev/null; then
+        PYTHON="$candidate"; break
+      fi
+    done
+  fi
+  [[ -x "$PYTHON" && -f "$ENGINE" ]] || { echo 'av: Python helper missing. Reinstall av and its helper.' >&2; return 1; }
+  [[ -x "$CLAMD_BIN" && -x "$CLAMSCAN_BIN" ]] || { echo 'av: ClamAV is not installed (clamd and clamscan required).' >&2; return 1; }
+  "$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3,10))' || { echo 'av: Python 3.10 or newer is required.' >&2; return 1; }
+  local perf=$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null)
+  [[ "$perf" == <-> ]] || perf=4
+  JOBS=$perf; ((JOBS>4)) && JOBS=4; ((JOBS<1)) && JOBS=1
+  if [[ -n "$AV_JOBS" ]]; then
+    [[ "$AV_JOBS" == <-> ]] && ((AV_JOBS>=1 && AV_JOBS<=32)) || { echo 'av: AV_JOBS must be an integer from 1 to 32.' >&2; return 1; }
+    JOBS=$AV_JOBS
+  fi
+  if [[ "${1:-state}" != runtime-only ]]; then
+    "$PYTHON" "$ENGINE" init --state "$AVDIR" --database "$DBDIR" || return 2
+    mkdir -p "$LOGDIR" || return 2
+  fi
+  COLS=$(tput cols 2>/dev/null); [[ "$COLS" == <-> ]] || COLS=80
+  trap cleanup_all EXIT
+  trap 'cleanup_all; exit 130' HUP TERM
+}
+
+[[ -n "$AV_SOURCE_ONLY" ]] && return 0 2>/dev/null
+while [[ "${1:-}" == --jobs || "${1:-}" == --jobs=* ]]; do
+  if [[ "$1" == --jobs=* ]]; then AV_JOBS="${1#--jobs=}"; shift
+  else (($#>=2)) || { echo 'av: --jobs needs a number.' >&2; exit 2; }; AV_JOBS="$2"; shift 2; fi
+done
+case "${1:-}" in
+  --version|version) echo 'avclean 2.1.0 (av)'; exit 0 ;;
+  --help|-h|help)
+    cat <<'HELP'
+Usage: av [--jobs N] [command]
+
+Open the original menu: av
+Commands:
+  scan PATH... | --scan PATH...   Scan files or folders
+  quick                          Scan Downloads, Desktop and Documents
+  full                           Confirm and scan the five main locations
+  update | --update              Download/check signature updates
+  status | --status              Show engine and database status
+  doctor | --doctor              Check dependencies and database health
+  self-test | --self-test        Offline detection and engine smoke test
+  version | --version            Show the version
+  help | --help                  Show this help
+
+AV_JOBS=1..32 sets parallel workers (default: up to 4 performance cores).
+Scan exit codes: 0 clean, 1 detections, 2 incomplete/error, 130 cancelled.
+The menu keeps all original options 1-7 and q.
+HELP
+    exit 0 ;;
+  --self-test|self-test)
+    (($#==1)) || { echo 'av: self-test takes no file arguments.' >&2; exit 2; }
+    av_init runtime-only || exit 2
+    "$PYTHON" "$ENGINE" self-test --clamd "$CLAMD_BIN" --clamscan "$CLAMSCAN_BIN" --freshclam "$FRESHCLAM_BIN"
+    exit $? ;;
+esac
+av_init || exit 2
+case "${1:-}" in
+  --scan|scan) shift; run_scan custom 'Custom scan' "$@"; exit $? ;;
+  --update|update) shift; (($#==0)) || exit 2; do_update; exit $? ;;
+  --doctor|doctor) shift; (($#==0)) || exit 2
+    "$PYTHON" "$ENGINE" doctor --clamd "$CLAMD_BIN" --clamscan "$CLAMSCAN_BIN" --freshclam "$FRESHCLAM_BIN" --database "$DBDIR"
+    exit $? ;;
+  --status|status) show_status; exit $? ;;
+  quick) quick_scan; exit $? ;;
+  full) [[ -t 0 ]] || { echo 'av: use an interactive Terminal for full-scan confirmation.' >&2; exit 2; }
+    full_scan; exit $? ;;
+esac
+(($#)) && { echo 'av: unknown argument. Use --help.' >&2; exit 2; }
+[[ -t 0 ]] || { echo 'av: use --scan PATH for a non-interactive scan.' >&2; exit 2; }
+choice=""
+while true; do
+  header Menu; echo; dashboard; echo; rule; echo
+  item 1 'Update signatures' 'fetch the latest definitions'
+  item 2 'Quick scan' 'Downloads, Desktop, Documents'
+  item 3 'Choose folder' 'browse and scan a folder'
+  item 4 'Full scan' 'five main filesystem locations'
+  item 5 'Drag & drop' 'scan files or folders'
+  item 6 'Scan history' 'recent results and logs'
+  item 7 'System status' 'engine, workers, quarantine'
+  item q Quit ''; echo
+  read -rk 1 "choice?  ${ACC}❯${N} " || exit 0
+  case "$choice" in
+    1) do_update; pause ;;
+    2) quick_scan; pause ;;
+    3) browse ;;
+    4) full_scan; pause ;;
+    5) custom_scan; pause ;;
+    6) history_view ;;
+    7) show_status; pause ;;
+    q|Q) [[ -t 1 ]] && clear; exit 0 ;;
+  esac
+done
