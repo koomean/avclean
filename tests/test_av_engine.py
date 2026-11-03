@@ -922,9 +922,10 @@ class UpdateSignatureIntegrationTests(unittest.TestCase):
             "#!/usr/bin/env python3\n"
             "import json, os, signal, sys\n"
             "from pathlib import Path\n"
-            "args = dict(item[2:].split('=', 1) for item in sys.argv[1:])\n"
+            "args = dict(item[2:].split('=', 1) for item in sys.argv[1:] if '=' in item)\n"
+            "flags = [item for item in sys.argv[1:] if '=' not in item]\n"
             "cfg = Path(args['config-file'])\n"
-            "data = dict(config_path=str(cfg), config=cfg.read_text(), args=args, pid=os.getpid())\n"
+            "data = dict(config_path=str(cfg), config=cfg.read_text(), args=args, flags=flags, pid=os.getpid())\n"
             "Path(os.environ['TEST_CAPTURE']).write_text(json.dumps(data))\n"
             "if os.environ['TEST_MODE'] == 'cancel':\n"
             "    while True: signal.pause()\n"
@@ -971,6 +972,7 @@ exit $result_code
         self.assertIn("DatabaseMirror database.clamav.net", data["config"])
         self.assertFalse(any(line.split() and line.split()[0] == "NotifyClamd" for line in data["config"].splitlines()))
         self.assertEqual(data["args"]["datadir"], str(self.prefix / "var/lib/clamav"))
+        self.assertIn("--no-dns", data["flags"])
         return data
 
     def test_success_uses_private_filtered_config_and_marks_freshness(self):
@@ -1034,9 +1036,9 @@ class CleanMachineCliTests(unittest.TestCase):
         self.runtime = self.root / "fake-runtime.py"
         self.runtime.write_text(
             "#!/usr/bin/env python3\n"
-            "import sys\n"
+            "import os, sys\n"
             "if sys.argv[1:] == ['--version']:\n"
-            "    print('ClamAV 1.5.4/fixture'); sys.exit(0)\n"
+            "    print(os.environ.get('TEST_CLAMSCAN_VERSION', 'ClamAV 1.5.4/fixture')); sys.exit(0)\n"
             "sys.exit(13)\n"
         )
         self.runtime.chmod(0o700)
@@ -1084,6 +1086,19 @@ class CleanMachineCliTests(unittest.TestCase):
         self.assertIn(str(database), (state / "freshclam.conf").read_text())
         self.assertIn(b"2 \xc2\xb7 private engine", result.stdout)
         self.assertFalse((self.home / ".av").exists())
+
+    @unittest.skipUnless(sys.platform == "darwin", "Public wrapper supports macOS")
+    def test_status_shows_full_engine_version_with_or_without_database_suffix(self):
+        for output, expected in (
+            ("ClamAV 1.5.4", "ClamAV 1.5.4"),
+            ("ClamAV 1.5.4/28158/Tue Nov 3 2026", "ClamAV 1.5.4"),
+            ("", "not found"),
+        ):
+            with self.subTest(version_output=output):
+                result = self.run_cli(["status"], {"TEST_CLAMSCAN_VERSION": output})
+                self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+                engine_row = next(line for line in result.stdout.decode().splitlines() if "Engine" in line)
+                self.assertTrue(engine_row.endswith(expected), engine_row)
 
     def test_unsupported_platform_fails_before_creating_user_state(self):
         mock_bin = self.root / "mock-bin"

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# avclean 2.1.0 - the av on-demand ClamAV menu for macOS.
+# avclean 2.1.1 - the av on-demand ClamAV menu for macOS.
 # One private engine per menu session; Python handles safe file accounting.
 
 export LC_CTYPE=en_US.UTF-8
@@ -148,7 +148,8 @@ quarantine_count() { "$PYTHON" "$ENGINE" count-quarantine --dest "$QDIR" 2>/dev/
 dashboard() {
   local v ep age c
   v=$("$CLAMSCAN_BIN" --version 2>/dev/null)
-  row Engine "${${(s:/:)v}[1]:-not found}"
+  v=${v%%/*}
+  row Engine "${v:-not found}"
   ep=$(sig_epoch)
   if [[ -n "$ep" ]]; then
     age=$(( $(date +%s) - ep )); c=$OK
@@ -170,7 +171,8 @@ update_signatures() {
   if ! awk '$1 != "NotifyClamd"' "$FRESHCLAM_CONF" > "$RUN_UPDATECONF"; then
     rm -f -- "$RUN_UPDATECONF"; RUN_UPDATECONF=""; return 2
   fi
-  "$FRESHCLAM_BIN" --config-file="$RUN_UPDATECONF" --datadir="$DBDIR" > "$update_log" 2>&1 &
+  # Use HTTPS checks directly so stalled DNS TXT lookups cannot delay on-demand updates.
+  "$FRESHCLAM_BIN" --no-dns --config-file="$RUN_UPDATECONF" --datadir="$DBDIR" > "$update_log" 2>&1 &
   RUN_SCANPID=$!
   while kill -0 "$RUN_SCANPID" 2>/dev/null; do
     if ((ABORT)); then stop_child "$RUN_SCANPID"; RUN_SCANPID=""; rm -f -- "$RUN_UPDATECONF"; RUN_UPDATECONF=""; printf '\r\033[K'; return 130; fi
@@ -443,7 +445,7 @@ while [[ "${1:-}" == --jobs || "${1:-}" == --jobs=* ]]; do
   else (($#>=2)) || { echo 'av: --jobs needs a number.' >&2; exit 2; }; AV_JOBS="$2"; shift 2; fi
 done
 case "${1:-}" in
-  --version|version) echo 'avclean 2.1.0 (av)'; exit 0 ;;
+  --version|version) echo 'avclean 2.1.1 (av)'; exit 0 ;;
   --help|-h|help)
     cat <<'HELP'
 Usage: av [--jobs N] [command]

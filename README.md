@@ -20,7 +20,9 @@ The formula builds an isolated ClamAV/curl runtime against OpenSSL 3. It leaves 
 existing Homebrew ClamAV installation and its services alone. A source installation
 may take several minutes; Homebrew uses a matching prebuilt bottle when available.
 
-The first scan downloads official ClamAV signatures. To prepare them explicitly:
+Signature updates check official HTTPS database headers directly to avoid DNS TXT
+timeouts on networks that block those queries. The first scan downloads the
+signatures. To prepare them explicitly:
 
 ```sh
 av update

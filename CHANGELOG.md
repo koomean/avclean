@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.1
+
+- Show the complete engine version when ClamAV has no default signature database.
+- Check on-demand signature updates through HTTPS directly, avoiding slow DNS TXT
+  lookups on networks that block them.
+
 ## 2.1.0
 
 - Publish Homebrew package `avclean` with executable `av`.

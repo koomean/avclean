@@ -27,7 +27,7 @@ import threading
 import time
 import unicodedata
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 MAX_FILE_SIZE = 2047 * 1024 * 1024
 COUNTS = ("indexed", "completed", "scanned", "threats", "limits", "errors", "skipped")
 
