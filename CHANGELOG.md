@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.2
+
+- Keep FreshClam update logs out of scan history and the last-scan dashboard.
+- Keep repeated history rows free of internal shell-variable output.
+- Return cancellation status 130 when a full scan is declined or receives EOF.
+
 ## 2.1.1
 
 - Show the complete engine version when ClamAV has no default signature database.

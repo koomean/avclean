@@ -747,6 +747,86 @@ exit $result_code
         self.assertEqual(len(reports), 1)
         return json.loads(reports[0].read_text())
 
+    def history_output(self, selection=""):
+        environment = os.environ.copy()
+        environment.update(
+            AV_SOURCE_ONLY="1", AV_DIR=str(self.avdir), AV_PYTHON=sys.executable,
+            AV_ENGINE_PATH=str(ENGINE_SOURCE), MENU_SOURCE=str(MENU_SOURCE),
+            TEST_OPENED=str(self.root / "opened-log"),
+        )
+        script = r'''source "$MENU_SOURCE"
+print -r -- "LAST=$(last_scan)"
+less() { print -rl -- "$@" > "$TEST_OPENED"; }
+history_view
+exit 0
+'''
+        return subprocess.run(["/bin/zsh", "-c", script], env=environment, input=selection,
+                              text=True, capture_output=True, timeout=5)
+
+    def test_scan_history_ignores_newer_operational_logs_and_opens_selected_scan(self):
+        logdir = self.avdir / "logs"
+        legacy = logdir / "20261025-123456-quick.log"
+        legacy.write_text("SUMMARY scanned=3 infected=0 errors=0\n")
+        current = logdir / "20261103-090646-custom-20999-21550.log"
+        current.write_text("SUMMARY scanned=7 infected=0 errors=0\n")
+        current.with_suffix(".log.json").write_text(json.dumps({
+            "indexed": 7, "completed": 7, "scanned": 7, "threats": 0,
+            "limits": 0, "errors": 0, "skipped": 0, "outcome": "clean",
+            "duration": 1, "records": [],
+        }))
+        prior = logdir / "20261102-100000-quick-123-456.log"
+        prior.write_text(current.read_text())
+        prior.with_suffix(".log.json").write_text(current.with_suffix(".log.json").read_text())
+        os.utime(prior, (150, 150))
+        operational = logdir / "freshclam.log"
+        operational.write_text("FreshClam update completed\n")
+        directory = logdir / "20261103-235959-folder.log"
+        directory.mkdir()
+        for path, stamp in ((legacy, 100), (current, 200), (operational, 300), (directory, 400)):
+            os.utime(path, (stamp, stamp))
+        result = self.history_output("1\n")
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("LAST=2026-11-03 09:06 · custom", result.stdout)
+        self.assertIn("2026-10-25 12:34", result.stdout)
+        self.assertIn("2026-11-03 09:06", result.stdout)
+        self.assertNotIn("fres-hc-la", result.stdout)
+        self.assertNotIn("23:59", result.stdout)
+        self.assertNotRegex(result.stdout, r"(?m)^(indexed|completed|limits|skipped|duration)=")
+        self.assertEqual((self.root / "opened-log").read_text().splitlines()[-1], str(current))
+
+    def test_operational_logs_alone_do_not_claim_a_scan_history(self):
+        (self.avdir / "logs/freshclam.log").write_text("FreshClam update completed\n")
+        result = self.history_output()
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("LAST=never", result.stdout)
+        self.assertIn("No scans yet.", result.stdout)
+        self.assertNotIn("fres-hc-la", result.stdout)
+
+    def test_full_scan_confirmation_cancels_or_preserves_scan_result(self):
+        for answer, read_code, scan_code, expected in (
+            ("n", 0, 0, 130), ("", 0, 0, 130), ("", 1, 0, 130),
+            ("y", 0, 0, 0), ("Y", 0, 1, 1), ("y", 0, 2, 2),
+        ):
+            with self.subTest(answer=answer, read_code=read_code, scan_code=scan_code):
+                environment = os.environ.copy()
+                environment.update(
+                    AV_SOURCE_ONLY="1", MENU_SOURCE=str(MENU_SOURCE), TEST_ANSWER=answer,
+                    TEST_READ_CODE=str(read_code), TEST_SCAN_CODE=str(scan_code),
+                )
+                script = r'''source "$MENU_SOURCE"
+read() { yn="$TEST_ANSWER"; return "$TEST_READ_CODE"; }
+run_scan() { print -r -- 'SCAN CALLED'; return "$TEST_SCAN_CODE"; }
+full_scan
+'''
+                result = subprocess.run(["/bin/zsh", "-c", script], env=environment,
+                                        text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, expected, (result.stdout, result.stderr))
+                if expected == 130:
+                    self.assertIn("Cancelled", result.stdout)
+                    self.assertNotIn("SCAN CALLED", result.stdout)
+                else:
+                    self.assertIn("SCAN CALLED", result.stdout)
+
     def test_early_engine_start_failure_returns_two(self):
         process = self.menu_process("start_clamd() { return 1; }")
         output, error = process.communicate(timeout=3)

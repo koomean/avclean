@@ -1,5 +1,5 @@
 #!/bin/zsh
-# avclean 2.1.1 - the av on-demand ClamAV menu for macOS.
+# avclean 2.1.2 - the av on-demand ClamAV menu for macOS.
 # One private engine per menu session; Python handles safe file accounting.
 
 export LC_CTYPE=en_US.UTF-8
@@ -8,6 +8,8 @@ PREFIX="${HOMEBREW_PREFIX:-/opt/homebrew}"
 AVDIR="${AV_DIR:-$HOME/.av}"
 DBDIR="${AV_DB_DIR:-$AVDIR/database}"
 LOGDIR="$AVDIR/logs"
+# Both legacy and current scan logs begin YYYYMMDD-HHMMSS-; updater logs do not.
+SCAN_LOG_PATTERN='[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]-?*.log'
 QDIR="${AV_QUARANTINE_DIR:-$HOME/quarantine}"
 FRESHCLAM_CONF="${AV_FRESHCLAM_CONF:-$AVDIR/freshclam.conf}"
 SCRIPT_DIR="${${(%):-%x}:A:h}"
@@ -139,7 +141,7 @@ sig_epoch() {
 }
 last_scan() {
   local -a logs
-  logs=("$LOGDIR"/*.log(Nom)); ((${#logs})) || { echo never; return; }
+  logs=("$LOGDIR"/${~SCAN_LOG_PATTERN}(N.om)); ((${#logs})) || { echo never; return; }
   local name="${${logs[1]:t}%.log}"
   local label="${${name[17,-1]}%%-*}"
   echo "${name[1,4]}-${name[5,6]}-${name[7,8]} ${name[10,11]}:${name[12,13]} · $label"
@@ -335,8 +337,13 @@ full_scan() {
   echo '  Scans /Users, /Applications, /Library, /opt and /usr/local.'
   echo "  ${MUT}Only accessible regular files are scanned; errors are reported.${N}"
   echo "  ${MUT}$JOBS workers. Use AV_JOBS to choose another limit.${N}"
-  read -rk 1 "yn?  Continue? [y/N] "; echo
-  [[ "$yn" == [yY] ]] && run_scan full 'Full scan' /Users /Applications /Library /opt /usr/local
+  read -rk 1 "yn?  Continue? [y/N] " || yn=""
+  echo
+  if [[ "$yn" != [yY] ]]; then
+    echo "  ${WARN}■ Cancelled${N}"
+    return 130
+  fi
+  run_scan full 'Full scan' /Users /Applications /Library /opt /usr/local
 }
 custom_scan() {
   local raw="" t; local -a items=() targets=()
@@ -375,14 +382,14 @@ browse() {
 }
 history_view() {
   local -a logs; local i pick="" f name scanned infected errors outcome line summary
+  local indexed completed limits skipped duration
   header 'Scan history'; echo
-  logs=("$LOGDIR"/*.log(Nom[1,10]))
+  logs=("$LOGDIR"/${~SCAN_LOG_PATTERN}(N.om[1,10]))
   ((${#logs})) || { echo '  No scans yet.'; pause; return; }
   for ((i=1;i<=${#logs};i++)); do
     f=${logs[i]}; name="${${f:t}%.log}"; outcome=unknown; scanned='?'; infected='?'; errors=0
     if [[ -f "$f.json" ]]; then
       summary=$("$PYTHON" "$ENGINE" summary "$f.json")
-      local indexed completed limits skipped duration
       IFS=$'\t' read -r indexed completed scanned infected limits errors skipped outcome duration <<< "$summary"
     else
       line=$(awk '/^SUMMARY/{s=$0} END{print s}' "$f")
@@ -445,7 +452,7 @@ while [[ "${1:-}" == --jobs || "${1:-}" == --jobs=* ]]; do
   else (($#>=2)) || { echo 'av: --jobs needs a number.' >&2; exit 2; }; AV_JOBS="$2"; shift 2; fi
 done
 case "${1:-}" in
-  --version|version) echo 'avclean 2.1.1 (av)'; exit 0 ;;
+  --version|version) echo 'avclean 2.1.2 (av)'; exit 0 ;;
   --help|-h|help)
     cat <<'HELP'
 Usage: av [--jobs N] [command]
