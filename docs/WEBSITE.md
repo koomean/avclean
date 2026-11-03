@@ -15,7 +15,9 @@ Open <http://127.0.0.1:8765/>. Copy, language, demo tabs, installation tabs,
 keyboard navigation and mobile navigation are implemented in `assets/site.js`.
 The Thai HTML remains readable before JavaScript loads. English is available with
 the language button or `?lang=en`; only the language preference is stored locally.
-The site has no analytics, third-party JavaScript, or external font requests.
+The website source has no analytics, third-party JavaScript, or external font
+requests. The domain's existing Cloudflare proxy can inject its own security and
+analytics scripts; those settings are managed outside this repository.
 
 Keep product claims aligned with the CLI and README. The terminal screens and
 coverage example are explicitly illustrative. Update the release link, version,
