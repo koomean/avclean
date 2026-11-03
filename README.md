@@ -2,6 +2,8 @@
 
 A local, on-demand ClamAV scanner for macOS. Install **avclean**, run **av**.
 
+[Project website](https://avclean.koomean.com/) · [Installation guide](https://avclean.koomean.com/#install)
+
 The original seven-option Terminal menu stays intact. A private scanning engine,
 accurate coverage reports, safe filename handling and an offline detection test
 make the scanner easier to operate and verify.

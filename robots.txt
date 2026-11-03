@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://avclean.koomean.com/sitemap.xml

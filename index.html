@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f7fc">
+  <title>avclean — สแกนไฟล์บน Mac ในแบบของคุณ</title>
+  <meta name="description" content="avclean เครื่องมือสแกน ClamAV สำหรับ Mac Apple Silicon ใช้งานผ่าน Terminal เมนูเข้าใจง่าย สแกนในเครื่อง ติดตั้งด้วย Homebrew แล้วเรียก av ได้เลย">
+  <link rel="canonical" href="https://avclean.koomean.com/">
+  <link rel="alternate" hreflang="th" href="https://avclean.koomean.com/">
+  <link rel="alternate" hreflang="en" href="https://avclean.koomean.com/?lang=en">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://avclean.koomean.com/">
+  <meta property="og:title" content="avclean — Your Mac. Your files. Your call.">
+  <meta property="og:description" content="An open-source, on-demand ClamAV scanner for macOS. Install avclean. Run av.">
+  <meta property="og:image" content="https://avclean.koomean.com/assets/social-card.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="avclean: on-demand ClamAV scanning for macOS">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/site.css">
+  <script src="/assets/site.js" defer></script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"avclean","url":"https://avclean.koomean.com/","applicationCategory":"SecurityApplication","operatingSystem":"macOS on Apple Silicon","softwareVersion":"2.1.2","license":"https://github.com/koomean/avclean/blob/main/LICENSE","downloadUrl":"https://github.com/koomean/avclean/releases/latest","isAccessibleForFree":true,"author":{"@type":"Person","name":"koomean","url":"https://github.com/koomean"}}</script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">ข้ามไปเนื้อหา</a>
+  <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m5 7 5 5-5 5m8 0h6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V6a4 4 0 1 1 8 0v4m-4 5v2"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h4m6 0h6M4 17h10m6 0h0"/><circle cx="11" cy="7" r="3"/><circle cx="17" cy="17" r="3"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1-4-2-6-2m12 5v-4a3.5 3.5 0 0 0-1-3c3.3-.4 6.8-1.6 6.8-7.3A5.7 5.7 0 0 0 19.3 4a5.3 5.3 0 0 0-.1-3S18 .6 15 2.5a13.2 13.2 0 0 0-6 0C6 .6 4.8 1 4.8 1a5.3 5.3 0 0 0-.1 3 5.7 5.7 0 0 0-1.5 3.7c0 5.7 3.5 6.9 6.8 7.3a3.5 3.5 0 0 0-1 3v4" transform="translate(0 1) scale(.95)"/></symbol>
+    <symbol id="i-apple" viewBox="0 0 24 24"><path d="M15.4 3.8c.7-.9 1.2-2 .9-3.1-1 .1-2.3.8-3 1.6-.6.7-1.2 1.9-1 3 1.1.1 2.3-.6 3.1-1.5ZM19.8 16.1c-.4.9-.6 1.3-1.2 2.1-.8 1.2-1.9 2.7-3.3 2.7-1.2 0-1.5-.8-3.2-.8-1.6 0-2 .8-3.2.8-1.3 0-2.3-1.3-3.1-2.4C3.5 15.2 3 11 4.4 8.8c1-1.6 2.5-2.5 4-2.5 1.4 0 2.3.8 3.4.8 1.1 0 1.8-.8 3.4-.8 1.2 0 2.5.7 3.5 1.8-3.1 1.7-2.6 6.3 1.1 8Z" fill="currentColor" stroke="none"/></symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="nav-shell wrap">
+      <a class="brand" href="#" aria-label="avclean home"><span class="brand-icon" aria-hidden="true">a<span>v</span></span><span>avclean<span class="brand-period">.</span></span></a>
+      <nav class="main-nav" id="main-nav" aria-label="Main navigation">
+        <a href="#features" data-i18n="navFeatures">จุดเด่น</a>
+        <a href="#install" data-i18n="navInstall">ติดตั้ง</a>
+        <a href="#guide" data-i18n="navGuide">วิธีใช้</a>
+        <a href="#faq" data-i18n="navFaq">คำถามที่พบบ่อย</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="language-button" id="language-toggle" type="button" aria-label="Switch to English">EN</button>
+        <a class="github-link" href="https://github.com/koomean/avclean" aria-label="avclean on GitHub"><svg class="icon"><use href="#i-github"/></svg><span>GitHub</span></a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="เปิดเมนู"><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <a class="release-note" href="https://github.com/koomean/avclean/releases/tag/v2.1.2"><span class="release-version">v2.1.2</span><span data-i18n="heroRelease">เครื่องมือเล็กๆ สำหรับ Mac ของคุณ</span><svg class="icon"><use href="#i-arrow"/></svg></a>
+        <h1 id="hero-title"><span data-i18n="heroTitle1">สแกน Mac</span><span data-i18n="heroTitle2">ในแบบของคุณ.</span></h1>
+        <p class="hero-description" data-i18n="heroDescription">ตรวจไฟล์ด้วย ClamAV ผ่าน Terminal ที่ใช้ง่าย เลือกสแกนเมื่อต้องการ เห็นผลชัดเจน และจัดการทุกอย่างได้ในเครื่องของคุณ</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install"><span data-i18n="heroCta">เริ่มต้นด้วย Homebrew</span><svg class="icon"><use href="#i-arrow"/></svg></a>
+          <a class="text-link" href="#guide" data-i18n="heroSecondary">ดูวิธีใช้งาน</a>
+        </div>
+        <div class="quick-install">
+          <span class="prompt" aria-hidden="true">$</span><code>brew install koomean/tap/avclean</code>
+          <button class="copy-button" type="button" data-copy="brew install koomean/tap/avclean" aria-label="คัดลอกคำสั่งติดตั้ง" data-i18n-label="copyInstall"><svg class="icon"><use href="#i-copy"/></svg></button>
+        </div>
+        <p class="compatibility"><svg class="icon"><use href="#i-apple"/></svg><span data-i18n="compatibility">macOS · Apple Silicon</span><span class="tiny-divider"></span><span data-i18n="freeOpen">ฟรีและโอเพนซอร์ส</span></p>
+      </div>
+
+      <div class="hero-product">
+        <div class="product-backdrop" aria-hidden="true"><div class="file-stamp"><svg class="icon"><use href="#i-folder"/></svg><span>~/Downloads</span></div><span class="backdrop-mark">av</span></div>
+        <div class="terminal-window">
+          <div class="terminal-titlebar"><span class="window-controls" aria-hidden="true"><i></i><i></i><i></i></span><span>av — zsh</span><svg class="icon titlebar-icon"><use href="#i-terminal"/></svg></div>
+          <div class="terminal-tabs" role="tablist" aria-label="ตัวอย่างโปรแกรม" data-i18n-label="demoTabs">
+            <button role="tab" id="demo-tab-menu" aria-controls="demo-menu" aria-selected="true" tabindex="0" data-demo="menu" data-i18n="demoMenu">เมนู</button>
+            <button role="tab" id="demo-tab-scan" aria-controls="demo-scan" aria-selected="false" tabindex="-1" data-demo="scan" data-i18n="demoScan">ผลสแกน</button>
+            <button role="tab" id="demo-tab-health" aria-controls="demo-health" aria-selected="false" tabindex="-1" data-demo="health" data-i18n="demoHealth">ตรวจระบบ</button>
+          </div>
+          <div class="terminal-body">
+            <div id="demo-menu" role="tabpanel" aria-labelledby="demo-tab-menu" class="demo-panel">
+              <div class="terminal-command"><span>❯</span> av</div><div class="terminal-heading"><span>◆</span> ClamAV <span class="terminal-muted">/</span> Menu</div>
+              <div class="terminal-rule"></div>
+              <div class="terminal-info"><span>Engine</span><span>ClamAV 1.5.4</span></div><div class="terminal-info"><span>Signatures</span><span class="terminal-success">● up to date</span></div>
+              <div class="cli-menu"><div><b>1</b><span>Update signatures</span></div><div><b>2</b><span>Quick scan</span></div><div class="highlight-row"><b>3</b><span>Choose folder</span><span class="menu-enter">↵</span></div><div><b>4</b><span>Full scan</span></div><div><b>5</b><span>Drag &amp; drop</span></div><div><b>6</b><span>Scan history</span></div><div><b>7</b><span>System status</span></div><div><b>q</b><span>Quit</span></div></div>
+              <div class="terminal-prompt"><span>❯</span><span class="cursor-block" aria-hidden="true"></span></div>
+            </div>
+            <div id="demo-scan" role="tabpanel" aria-labelledby="demo-tab-scan" class="demo-panel" hidden>
+              <div class="terminal-command"><span>❯</span> av scan ~/Downloads</div><div class="terminal-heading"><span>◆</span> ClamAV <span class="terminal-muted">/</span> Custom scan</div><div class="terminal-rule"></div>
+              <p class="terminal-muted scan-workers">4 workers · private engine</p><div class="demo-progress"><span></span></div>
+              <p class="terminal-success scan-complete">✔ Scan complete · no threats found</p><div class="terminal-rule"></div>
+              <div class="scan-summary"><div><span>Files scanned</span><span>1,024 of 1,024</span></div><div><span>Threats</span><span class="terminal-success">0</span></div><div><span>Engine limits</span><span>0</span></div><div><span>Errors</span><span>0</span></div><div><span>Skipped</span><span>0</span></div></div>
+              <p class="terminal-muted sample-note" data-i18n="sampleResult">ข้อมูลสมมติสำหรับแสดงหน้าตาโปรแกรม</p>
+            </div>
+            <div id="demo-health" role="tabpanel" aria-labelledby="demo-tab-health" class="demo-panel" hidden>
+              <div class="terminal-command"><span>❯</span> av --self-test</div><div class="terminal-heading"><span>◆</span> Offline self-test</div><div class="terminal-rule"></div>
+              <div class="health-output"><p><b>[OK]</b> clamd · ClamAV 1.5.4</p><p><b>[OK]</b> clamscan · ClamAV 1.5.4</p><p><b>[OK]</b> freshclam · ClamAV 1.5.4</p><p><b>[OK]</b> Harmless signature detected</p><p><b>[OK]</b> Clean file accepted</p><p><b>[OK]</b> FILDES transport</p></div>
+              <div class="health-confirm"><svg class="icon"><use href="#i-check"/></svg><span>Offline test passed</span></div><p class="terminal-muted sample-note" data-i18n="sampleResult">ข้อมูลสมมติสำหรับแสดงหน้าตาโปรแกรม</p>
+            </div>
+          </div>
+        </div>
+        <div class="product-caption"><span class="caption-dot"></span><span data-i18n="demoCaption">ลองสลับดูตัวอย่างหน้าจอโปรแกรม</span></div>
+      </div>
+    </section>
+
+    <div class="principles wrap"><p><svg class="icon"><use href="#i-lock"/></svg><span data-i18n="principleLocal">ไฟล์อยู่บนเครื่องคุณ</span></p><p><svg class="icon"><use href="#i-terminal"/></svg><span data-i18n="principleDemand">เปิดใช้เมื่อต้องการ</span></p><p><svg class="icon"><use href="#i-github"/></svg><span data-i18n="principleOpen">เปิดซอร์สให้ตรวจสอบ</span></p></div>
+
+    <section class="features-section section-space wrap" id="features" aria-labelledby="features-title">
+      <div class="section-heading"><h2 id="features-title" data-i18n="featuresTitle">เรียบง่ายตอนใช้<br>ใส่ใจในรายละเอียด</h2><p data-i18n="featuresIntro">เครื่องมือที่ช่วยให้คุณรู้ว่าสแกนอะไรไปแล้ว และยังมีอะไรที่ต้องตรวจต่อ โดยไม่เพิ่มความวุ่นวายให้ Mac</p></div>
+      <div class="feature-panels">
+        <article class="local-panel">
+          <div class="feature-symbol"><svg class="icon"><use href="#i-lock"/></svg></div>
+          <h3 data-i18n="localTitle">ไฟล์ของคุณ<br>อยู่กับคุณเสมอ</h3><p data-i18n="localBody">สแกนในเครื่องด้วย ClamAV โดยไม่อัปโหลดไฟล์ไปวิเคราะห์ อินเทอร์เน็ตใช้สำหรับอัปเดตฐานข้อมูลภัยคุกคาม</p>
+          <div class="local-illustration" aria-hidden="true"><div class="file-tile file-tile-back"><svg class="icon"><use href="#i-file"/></svg><span>.zip</span></div><div class="file-tile file-tile-front"><svg class="icon"><use href="#i-file"/></svg><span>.dmg</span></div><div class="local-lock"><svg class="icon"><use href="#i-lock"/></svg></div><span class="local-line"></span><span class="local-label">On your Mac</span></div>
+        </article>
+        <article class="coverage-panel">
+          <div class="feature-symbol"><svg class="icon"><use href="#i-file"/></svg></div><h3 data-i18n="coverageTitle">ผลลัพธ์ที่บอกได้มากกว่า<br>แค่ “ไม่พบภัยคุกคาม”</h3><p data-i18n="coverageBody">แยกไฟล์ที่สแกนแล้ว ข้อผิดพลาด ไฟล์ที่ข้าม และข้อจำกัดของ engine เพื่อให้คุณเห็นเมื่อการสแกนยังไม่ครบ</p>
+          <div class="coverage-example" aria-label="ตัวอย่างรายงานสแกนไม่ครบ" data-i18n-label="coverageExample"><div class="coverage-heading"><span class="coverage-dot"></span><span data-i18n="coverageIncomplete">สแกนไม่ครบ · มีรายการให้ตรวจต่อ</span></div><div class="coverage-row"><span data-i18n="coverageScanned">ไฟล์ที่สแกนแล้ว</span><strong>248 / 250</strong></div><div class="coverage-track"><i></i><i></i></div><div class="coverage-key"><span><i></i><span data-i18n="coverageError">ข้อผิดพลาด</span><b>1</b></span><span><i></i><span data-i18n="coverageSkipped">ไฟล์ที่ข้าม</span><b>1</b></span></div><span class="illustration-label" data-i18n="illustration">ตัวอย่างการแสดงผล</span></div>
+        </article>
+      </div>
+      <div class="feature-notes">
+        <article><svg class="icon note-icon"><use href="#i-sliders"/></svg><h3 data-i18n="workersTitle">ใช้ทรัพยากรอย่างพอดี</h3><p data-i18n="workersBody">เริ่มต้นด้วย workers สูงสุด 4 งานตามจำนวน performance cores และใช้ engine เดิมซ้ำระหว่างเปิดเมนู ปรับเองได้ด้วย --jobs</p></article>
+        <article><svg class="icon note-icon"><use href="#i-folder"/></svg><h3 data-i18n="quarantineTitle">คุณตัดสินใจก่อนกักกัน</h3><p data-i18n="quarantineBody">ยืนยันก่อนย้ายไฟล์ เก็บตำแหน่งเดิมไว้ใน manifest และตรวจว่าไฟล์ไม่ได้เปลี่ยนหลังสแกน พร้อมป้องกันชื่อไฟล์ชนกัน</p></article>
+        <article><svg class="icon note-icon"><use href="#i-terminal"/></svg><h3 data-i18n="checkTitle">ตรวจความพร้อมได้เอง</h3><p data-i18n="checkBody">ใช้ doctor ตรวจระบบ หรือ self-test ทดสอบการตรวจจับด้วย signature จำลองที่ไม่เป็นอันตราย แบบไม่ต้องต่ออินเทอร์เน็ต</p></article>
+      </div>
+    </section>
+
+    <section class="install-section" id="install" aria-labelledby="install-title"><div class="install-inner wrap">
+      <div class="install-copy"><span class="section-marker"><svg class="icon"><use href="#i-terminal"/></svg> Homebrew</span><h2 id="install-title" data-i18n="installTitle">ติดตั้ง avclean.<br>แล้วเรียก av ได้เลย.</h2><p data-i18n="installDescription">เปิด Terminal แล้วเริ่มด้วยคำสั่งนี้ ไม่ต้องสมัครบัญชี ไม่ต้องตั้งค่า engine ด้วยตัวเอง</p><div class="install-requirements"><svg class="icon"><use href="#i-apple"/></svg><span data-i18n="requirements">สำหรับ macOS บน Apple Silicon<br>ต้องติดตั้ง Homebrew ไว้ก่อน</span></div><a class="install-help" href="https://brew.sh/" data-i18n="brewHelp">ยังไม่มี Homebrew? ดูวิธีติดตั้ง</a></div>
+      <div class="install-instructions">
+        <div class="install-tabs" role="tablist" aria-label="วิธีติดตั้ง" data-i18n-label="installTabs"><button role="tab" id="install-tab-first" aria-controls="install-first" aria-selected="true" tabindex="0" data-install="first" data-i18n="installFirst">ติดตั้งครั้งแรก</button><button role="tab" id="install-tab-short" aria-controls="install-short" aria-selected="false" tabindex="-1" data-install="short" data-i18n="installShort">อยากใช้ชื่อสั้น?</button></div>
+        <div id="install-first" role="tabpanel" aria-labelledby="install-tab-first" class="install-panel">
+          <div class="install-step"><span class="step-number">1</span><div><h3 data-i18n="stepInstall">ติดตั้งแพ็กเกจ</h3><div class="code-line"><code>brew install koomean/tap/avclean</code><button class="copy-button" type="button" data-copy="brew install koomean/tap/avclean" aria-label="คัดลอกคำสั่งติดตั้ง" data-i18n-label="copyInstall"><svg class="icon"><use href="#i-copy"/></svg></button></div></div></div>
+          <div class="install-step"><span class="step-number">2</span><div><h3 data-i18n="stepUpdate">เตรียมฐานข้อมูลล่าสุด</h3><div class="code-line"><code>av update</code><button class="copy-button" type="button" data-copy="av update" aria-label="คัดลอก av update"><svg class="icon"><use href="#i-copy"/></svg></button></div></div></div>
+          <div class="install-step"><span class="step-number">3</span><div><h3 data-i18n="stepRun">เปิดเมนู แล้วเลือกสิ่งที่ต้องการสแกน</h3><div class="code-line"><code>av</code><button class="copy-button" type="button" data-copy="av" aria-label="คัดลอก av"><svg class="icon"><use href="#i-copy"/></svg></button></div></div></div>
+        </div>
+        <div id="install-short" role="tabpanel" aria-labelledby="install-tab-short" class="install-panel" hidden><p class="short-explanation" data-i18n="shortDescription">ตั้งค่า Tap ครั้งเดียว แล้วใช้ brew install avclean ได้เลย เครื่องที่เคยติดตั้งจาก Tap นี้แล้วใช้ชื่อสั้นได้ทันที</p><div class="code-block"><button class="copy-button" type="button" data-copy="brew tap koomean/tap&#10;brew trust --formula koomean/tap/avclean&#10;brew install avclean" aria-label="คัดลอกคำสั่งตั้งค่า Tap" data-i18n-label="copyTap"><svg class="icon"><use href="#i-copy"/></svg></button><pre><code>brew tap koomean/tap
+brew trust --formula koomean/tap/avclean
+brew install avclean</code></pre></div><p class="short-footnote" data-i18n="shortFootnote">Homebrew 6+ ต้องใช้ brew trust ส่วนรุ่นเก่าข้ามบรรทัดนี้ได้ แพ็กเกจนี้เผยแพร่ผ่าน koomean/tap ยังไม่ได้อยู่ใน homebrew/core</p></div>
+        <div class="install-footer"><svg class="icon"><use href="#i-check"/></svg><span data-i18n="installFooter">เลือกไฟล์สำเร็จรูปให้อัตโนมัติเมื่อมีรุ่นที่เข้ากัน</span></div>
+      </div>
+    </div></section>
+
+    <section class="guide-section section-space wrap" id="guide" aria-labelledby="guide-title"><div class="section-heading"><h2 id="guide-title" data-i18n="guideTitle">เมนูก็ง่าย<br>คำสั่งก็คล่อง</h2><p data-i18n="guideIntro">เปิด av เพื่อใช้เมนู 1–7 หรือพิมพ์คำสั่งตรงๆ ให้เข้ากับวิธีทำงานของคุณ</p></div>
+      <div class="command-list">
+        <div class="command-row"><div><h3 data-i18n="cmdScanTitle">สแกนโฟลเดอร์ที่เลือก</h3><p data-i18n="cmdScanBody">เปลี่ยน path เป็นไฟล์หรือโฟลเดอร์ของคุณ</p></div><div class="command-code"><code>av scan "$HOME/Downloads"</code><button class="copy-button" type="button" data-copy="av scan &quot;$HOME/Downloads&quot;" aria-label="คัดลอกคำสั่งสแกน" data-i18n-label="copyScan"><svg class="icon"><use href="#i-copy"/></svg></button></div></div>
+        <div class="command-row"><div><h3 data-i18n="cmdQuickTitle">สแกนพื้นที่ที่ใช้บ่อย</h3><p data-i18n="cmdQuickBody">Downloads, Desktop และ Documents</p></div><div class="command-code"><code>av quick</code><button class="copy-button" type="button" data-copy="av quick" aria-label="คัดลอก av quick"><svg class="icon"><use href="#i-copy"/></svg></button></div></div>
+        <div class="command-row"><div><h3 data-i18n="cmdDoctorTitle">ตรวจความพร้อมของระบบ</h3><p data-i18n="cmdDoctorBody">ตรวจ engine, การเชื่อมต่อภายใน และฐานข้อมูล</p></div><div class="command-code"><code>av doctor</code><button class="copy-button" type="button" data-copy="av doctor" aria-label="คัดลอก av doctor"><svg class="icon"><use href="#i-copy"/></svg></button></div></div>
+        <div class="command-row"><div><h3 data-i18n="cmdTestTitle">ทดสอบการตรวจจับแบบออฟไลน์</h3><p data-i18n="cmdTestBody">ใช้ไฟล์และ signature จำลองที่ไม่เป็นอันตราย</p></div><div class="command-code"><code>av --self-test</code><button class="copy-button" type="button" data-copy="av --self-test" aria-label="คัดลอก av self-test"><svg class="icon"><use href="#i-copy"/></svg></button></div></div>
+      </div>
+      <p class="guide-more"><span data-i18n="guideMore">เลือกจำนวน workers เองด้วย --jobs หรือดูคำสั่งทั้งหมดด้วย av --help</span><a class="text-link" href="https://github.com/koomean/avclean#use"><span data-i18n="guideDocs">อ่านคู่มือฉบับเต็ม</span><svg class="icon"><use href="#i-arrow"/></svg></a></p>
+    </section>
+
+    <section class="open-section"><div class="open-inner wrap"><div class="open-logo" aria-hidden="true"><svg class="icon"><use href="#i-github"/></svg></div><div><h2 data-i18n="openTitle">ดูได้ทุกบรรทัด พัฒนาต่อได้ทุกคน</h2><p data-i18n="openDescription">แอพโอเพนซอร์สภายใต้ MIT พร้อมชุดทดสอบ regression 84 รายการในรุ่น 2.1.2 และ build ที่ทดสอบบน macOS 15 และ 26</p></div><a class="button button-white" href="https://github.com/koomean/avclean"><span data-i18n="openCta">เปิด GitHub</span><svg class="icon"><use href="#i-arrow"/></svg></a></div></section>
+
+    <section class="faq-section section-space wrap" id="faq" aria-labelledby="faq-title"><div class="faq-heading"><h2 id="faq-title" data-i18n="faqTitle">ก่อนเริ่มใช้งาน</h2><p data-i18n="faqIntro">เรื่องที่ควรรู้เกี่ยวกับเครื่องมือเล็กๆ ตัวนี้</p></div><div class="faq-list">
+      <details><summary><span data-i18n="faq1q">รองรับ Mac รุ่นไหนบ้าง?</span><span class="faq-plus" aria-hidden="true"></span></summary><p data-i18n="faq1a">รุ่นนี้รองรับ macOS บน Apple Silicon (ชิปตระกูล M) ยังไม่รองรับ Intel หรือ Linux มีไฟล์ติดตั้งสำเร็จรูปที่ทดสอบบน macOS 15 และ 26 หาก build จากซอร์สต้องมี Xcode Command Line Tools ที่เข้ากับ macOS ของคุณ</p></details>
+      <details><summary><span data-i18n="faq2q">สแกนตลอดเวลาอยู่เบื้องหลังไหม?</span><span class="faq-plus" aria-hidden="true"></span></summary><p data-i18n="faq2a">ไม่ใช่ระบบป้องกันแบบ real-time คุณเป็นคนเลือกเริ่มสแกนเอง โดย engine ส่วนตัวจะถูกใช้ซ้ำระหว่างเปิดเมนูและปิดเมื่อออกจากโปรแกรม ไฟล์ที่ไม่พบภัยคุกคามไม่ได้หมายความว่าปลอดภัยจากภัยทุกชนิด และผลตรวจอาจมี false positive ได้</p></details>
+      <details><summary><span data-i18n="faq3q">จำเป็นต้องใช้อินเทอร์เน็ตไหม?</span><span class="faq-plus" aria-hidden="true"></span></summary><p data-i18n="faq3a">ใช้ตอนติดตั้งและอัปเดตฐานข้อมูล ClamAV เท่านั้น เมื่อมีฐานข้อมูลแล้วสามารถสแกนในเครื่องได้ ไฟล์ที่สแกนไม่ถูกอัปโหลด ส่วน doctor และ self-test ทำงานแบบออฟไลน์ได้</p></details>
+      <details><summary><span data-i18n="faq4q">ทำไมบางไฟล์จึงสแกนไม่ครบ?</span><span class="faq-plus" aria-hidden="true"></span></summary><p data-i18n="faq4a">สิทธิ์ macOS, symbolic links, ไฟล์ cloud ที่ยังไม่ดาวน์โหลด, ไฟล์ใหญ่กว่า 2047 MiB หรือข้อจำกัดของ engine อาจทำให้มีไฟล์ที่ข้ามหรือข้อผิดพลาด โปรแกรมจะแจ้งแยกไว้ การให้ Terminal มี Full Disk Access ช่วยลดข้อผิดพลาดจากสิทธิ์ได้ ส่วน Full scan ครอบคลุม /Users, /Applications, /Library, /opt และ /usr/local</p></details>
+      <details><summary><span data-i18n="faq5q">พบไฟล์ต้องสงสัยแล้วจะเกิดอะไรขึ้น?</span><span class="faq-plus" aria-hidden="true"></span></summary><p data-i18n="faq5a">โปรแกรมจะแสดงผลให้ตรวจสอบ และถามก่อนย้ายไฟล์ไปกักกันเมื่อใช้แบบ interactive ไฟล์กักกันเริ่มต้นอยู่ใน ~/quarantine พร้อม manifest เก็บตำแหน่งเดิม คุณควรตรวจผลก่อนตัดสินใจเพราะอาจเป็น false positive</p></details>
+      <details><summary><span data-i18n="faq6q">อัปเดตหรือลบโปรแกรมอย่างไร?</span><span class="faq-plus" aria-hidden="true"></span></summary><p data-i18n="faq6a">ใช้ av update เพื่ออัปเดตฐานข้อมูล ส่วนตัวแอพอัปเดตด้วย brew update แล้วตามด้วย brew upgrade avclean หากต้องการลบใช้ brew uninstall avclean การตั้งค่า ฐานข้อมูล และ log ใน ~/.av รวมถึงไฟล์กักกันยังถูกเก็บไว้</p></details>
+    </div></section>
+  </main>
+
+  <footer class="site-footer wrap"><div class="footer-top"><a class="brand" href="#" aria-label="avclean home"><span class="brand-icon" aria-hidden="true">a<span>v</span></span><span>avclean<span class="brand-period">.</span></span></a><p data-i18n="footerTagline">เครื่องมือที่เรียบง่าย สำหรับ Mac ของคุณ</p><nav aria-label="Project links"><a href="https://github.com/koomean/avclean/releases" data-i18n="footerReleases">รุ่นที่เผยแพร่</a><a href="https://github.com/koomean/avclean/issues" data-i18n="footerIssues">แจ้งปัญหา</a><a href="https://github.com/koomean/avclean/blob/main/SECURITY.md" data-i18n="footerSecurity">ความปลอดภัย</a></nav></div><div class="footer-bottom"><span>© 2026 koomean</span><span><a href="https://github.com/koomean/avclean/blob/main/LICENSE">MIT</a><span class="footer-dot">·</span><a href="https://github.com/koomean/avclean/blob/main/THIRD_PARTY_NOTICES.md" data-i18n="footerLicenses">สิทธิ์การใช้งานส่วนประกอบ</a></span><a href="#main" data-i18n="backTop">กลับด้านบน ↑</a></div></footer>
+  <div class="copy-toast" id="copy-toast" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
