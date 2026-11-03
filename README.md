@@ -16,6 +16,23 @@ brew install koomean/tap/avclean
 av
 ```
 
+After the first installation, Homebrew remembers the tap and trusts this formula,
+so `brew install avclean`, `brew upgrade avclean` and `brew uninstall avclean`
+work by short name.
+
+To use `brew install avclean` for the first installation, set up the tap once:
+
+```sh
+brew tap koomean/tap
+brew trust --formula koomean/tap/avclean
+brew install avclean
+```
+
+`brew trust` is required on Homebrew 6 and later; older versions can omit that line.
+A fresh machine cannot discover this third-party tap from the short name alone.
+The package is not part of `homebrew/core`; inclusion requires Homebrew review.
+See [Homebrew's tap trust documentation](https://docs.brew.sh/Tap-Trust).
+
 The formula builds an isolated ClamAV/curl runtime against OpenSSL 3. It leaves an
 existing Homebrew ClamAV installation and its services alone. A source installation
 may take several minutes; Homebrew uses a matching prebuilt bottle when available.
@@ -123,3 +140,6 @@ and [security reporting](SECURITY.md).
 ติดตั้งด้วย `brew install koomean/tap/avclean` แล้วเปิดด้วย `av` ได้เลย เมนู 1–7 และ q
 เหมือนเดิม ใช้ `av update` อัปเดตฐานข้อมูล และ `av --self-test` ทดสอบตัวตรวจแบบออฟไลน์
 ไฟล์ที่สแกนไม่ถูกอัปโหลด การกักกันต้องยืนยันก่อน และรายงานจะแจ้งเมื่อสแกนไม่ครบ
+
+หลังติดตั้งจาก Tap นี้แล้ว ใช้ `brew install avclean` และ `brew upgrade avclean` ได้ด้วยชื่อสั้น
+เครื่องใหม่ต้องเพิ่มและเชื่อถือ Tap ตามขั้นตอนด้านบนก่อน แพ็กเกจนี้ยังไม่ได้อยู่ใน `homebrew/core`
